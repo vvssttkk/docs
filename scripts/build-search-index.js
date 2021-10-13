@@ -6,6 +6,7 @@ const contentDirectory = path.join( process.cwd(), '.next/server/pages' )
 const parser = require( 'node-html-parser' )
 const algoliasearch = require( 'algoliasearch' )
 const { convert } = require('html-to-text');
+const { remove } = require("lodash")
 
 const SKIP_THESE = ['/menu', '/404', '/500']
 
@@ -75,15 +76,37 @@ function getAllFilesInDirectory(articleDirectory, files) {
         
         const root = parser.parse(contents)
         const doc_title = root.querySelector('title')
-        const title = root.querySelector('h1')
+
+        // Clean up some tags we don't want
+        const remove_tags = ['select', 'pre', 'label']
+        for (const i in remove_tags) {
+            const tags = root.querySelectorAll(remove_tags[i]);
+            for (const ii in tags) {
+                if (tags[ii].parentNode) {
+                    tags[ii].parentNode.removeChild(tags[ii]);
+                }
+            }
+        }
+
+        let title = root.querySelector('h1')
+        const sub_title = root.querySelector('h2')
         const content = convert(root.querySelector('article').innerHTML)
         const slug = url.split('/')
         const isnum = /^[\d\.]+$/.test(slug[1])
         const version = isnum ? slug[1] : 'latest'
         
-        if (!title || !doc_title) {
+        if (version !== 'latest') {
+            console.warn(`!!! Skipping ${url} because it's for an older version.`);
+            continue;
+        }
+
+        if ((!title && !sub_title) || !doc_title) {
             console.warn(`!!! Skipping ${url} because the document has no title or H1 tag.`)
             continue
+        }
+
+        if (!title && sub_title) {
+            title = sub_title;
         }
 
         if (!content) {
